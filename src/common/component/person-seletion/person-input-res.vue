@@ -1,7 +1,7 @@
 <style lang="scss" scoped>
     .person-select-content {
-        display: flex;
-        justify-content: space-between;
+        @include compatibleFlex;
+        @include flex-justify;
         .left-content, .right-content {
             height: 100%;
             display: inline-block;
@@ -13,8 +13,8 @@
                     height: calc(100% - 38px);
                     .person-page {
                         margin-top: 4px;
-                        display: flex;
-                        justify-content: space-between;
+                        @include compatibleFlex;
+                        @include flex-justify;
                         line-height: 24px;
                     }
                     .person-search {
@@ -26,7 +26,7 @@
             }
             .result-list {
                 border: 1px solid #dddee1;
-                margin-top: 72px;
+                margin-top: 70px;
                 padding: 4px;
                 overflow: auto;
                 ul {
@@ -50,8 +50,8 @@
             }
         }
         .control {
-            display: flex;
-            flex-direction: column;
+            @include compatibleFlex;
+            @include flex-direction(column);
             margin: auto 0;
             .control-btn {
                 margin-bottom: 8px;
@@ -101,6 +101,7 @@
                 border: 1px solid #dddee1;
                 border-top: none;
                 height: 100%;
+                width: 100%;
                 overflow: auto;
                 .el-tree-node__content{
                     height: 26px;
@@ -141,27 +142,22 @@
         transition: all .2s ease-in-out;
         box-sizing: border-box;
     }
-    .el-tree-node__expand-icon{
-        margin-left: 8px;
-        border: 5px solid transparent;
-        -webkit-transform-origin: 25% 50%;
-        transform-origin: 25% 50%;
-        border-left-color: #495060;
-    }
-    .el-tree-node__expand-icon:hover{
-        border-left-color: #495060;
-    }
 </style>
 <template>
     <div class="person-select">
-        <Input v-if="single && person" v-model="currentValue" icon="ios-person-outline" @on-focus="showModel = true" :readonly="true"></Input>
-        <Input v-else v-model="currentValue" @on-focus="showModel = true" :readonly="true"></Input>
+        <div v-if="type === 'input'">
+            <Input v-if="single && person" v-model="currentValue" icon="ios-person-outline" @on-focus="initData" :readonly="true"></Input>
+            <Input v-else v-model="currentValue" @on-focus="initData" :readonly="true"></Input>
+        </div>
+        <div v-else>
+            <Button :type="type" :shape="shape" :size="size" :loading="loading" :icon="icon" :disabled="disabled" :long="long"  @click="initData"><slot></slot></Button>
+        </div>
         <Modal
                 v-model="showModel"
                 title="人员选择"
                 :width="600"
                 @on-ok="completeSelect"
-                :transfer="false">
+                :transfer="true">
             <div class="person-select-content" :style="single?'height:403px': 'height:435px'">
                 <div class="left-content">
                     <div>
@@ -193,7 +189,7 @@
                                     </div>
                                 </div>
                             </TabPane>
-                            <TabPane label="部门" name="depTab" v-if="department">
+                            <TabPane label="部门" name="depTab" v-if="org">
                                 <div :style="single?'height:331px': 'height:363px'">
                                     <el-tree :data="depTree" :props="defaultProps" v-loading="treeLoading" :show-checkbox="!single" :check-strictly="true" :load="loadDepNode" lazy ref="depElTree" :highlight-current="single"  @current-change="depCurrentChange"></el-tree>
                                 </div>
@@ -222,7 +218,7 @@
                     <div class="result-list" :style="single?'height:331px': 'height:363px'">
                         <ul>
                             <li v-for="user in result.personList" :class="user.checkTemp? 'active': ''" @click="user.checkTemp = !user.checkTemp"><Icon type="ios-person"></Icon>{{user.userFullName}}</li>
-                            <li v-for="dep in result.departmentList" :class="dep.checkTemp? 'active': ''" @click="dep.checkTemp = !dep.checkTemp"><Icon type="ios-flag"></Icon>{{dep.fullDepartmentName}}</li>
+                            <li v-for="dep in result.orgList" :class="dep.checkTemp? 'active': ''" @click="dep.checkTemp = !dep.checkTemp"><Icon type="ios-flag"></Icon>{{dep.fullDepartmentName}}</li>
                             <li v-for="team in result.teamList" :class="team.checkTemp? 'active': ''"  @click="team.checkTemp = !team.checkTemp"><Icon type="ios-people"></Icon></Icon>{{team.teamName}}</li>
                         </ul>
                     </div>
@@ -233,7 +229,7 @@
 </template>
 <script>
     import Util from '../../../libs/util';
-
+    import { Base64 } from 'js-base64';
     export default {
         props: {
             value: {
@@ -244,7 +240,7 @@
                 type: Boolean, //人员选择
                 default: true
             },
-            department:{
+            org:{
                 type: Boolean, //部门选择
                 default: true
             },
@@ -254,6 +250,23 @@
             },
             single: {
                 type:Boolean,//是否单选
+                default: false
+            },
+            type: {
+                type: String,
+                default: 'input'
+            },
+            shape: {
+                type: String
+            },
+            size: {
+                type: String
+            },
+            loading: Boolean,
+            disabled: Boolean,
+            icon: String,
+            long: {
+                type: Boolean,
                 default: false
             }
         },
@@ -277,7 +290,7 @@
                 currentValue: this.value,
                 currentDep: {},
                 showModel: false,
-                actTab: this.person?'personTab' : this.department? 'depTab': this.team? 'teamTab': '',
+                actTab: this.person?'personTab' : this.org? 'depTab': this.team? 'teamTab': '',
                 companys: [],
                 orgId: '',
                 keyWords: '',
@@ -289,7 +302,7 @@
                 defaultProps: {
                     children: 'children',
                     label: 'departmentName',
-                    isLeaf: function (data, node) {
+                    isLeaf: function (data) {
                         return !data.hasChildren;
                     }
                 },
@@ -301,9 +314,9 @@
                     key: 'userDesc',
                     ellipsis: true,
                     render: (h, params) => {
-                        let userInfo = JSON.parse(this.base64.decode(params.row.userDesc));
+                        let userInfo = JSON.parse(Base64.decode(params.row.userDesc));
                         let depFull = userInfo.departmentName;
-                        return h('span',userInfo.userName + " /" + depFull.replace(/_/g, '/'));
+                        return h('span',userInfo.userName + '/' + depFull.replace(/_/g, '/'));
                     }
                 }],
                 teamColumns: [{
@@ -313,17 +326,27 @@
                 }],
                 result:{
                     personList:[],
-                    departmentList:[],
+                    orgList:[],
                     teamList:[]
                 }
             };
         },
         methods: {
+            initData(){
+                this.keyWords = '';
+                this.searchPerson(0, 10);
+                this.showModel = true;
+                this.result = {
+                    personList:[],
+                    orgList:[],
+                    teamList:[]
+                };
+            },
             depCurrentChange(data){
                 this.currentDep = Object.assign({}, this.currentDep, data);
             },
             initCompany() {
-                Util.$http.get('/rescenter-rest/ResCenterApi/getOrganizationList', {
+                Util.resUrl.get('/rescenter-rest/ResCenterApi/getOrganizationList', {
                     params: {
                         identityToken: this.getToken(),
                         pageIndex: 0,
@@ -332,7 +355,6 @@
                 }).then((response) => {
                     if (response.data.result === '1') {
                         this.companys = response.data.data.organizationList;
-                        //this.orgId = this.companys[0].organizationId;
                         this.orgId = '8f4ddf6d-507a-4835-8db5-84e1480823f0';
                     }
                 });
@@ -340,7 +362,7 @@
             //获取所有部门
             departmentInit(organizationId){
                 this.treeLoading = true;
-                Util.$http.get('/rescenter-rest/ResCenterApi/getDepartmentListByOrgID', {
+                Util.resUrl.get('/rescenter-rest/ResCenterApi/getDepartmentListByOrgID', {
                     params:{
                         identityToken: this.getToken(),
                         organizationId: organizationId,
@@ -353,13 +375,13 @@
                         this.depTree = response.data.data.departmentList;
                         this.treeLoading = false;
                     }
-                }).catch(function(e) {
+                }).catch(function() {
                     this.treeLoading = false;
                 });
             },
             loadDepNode(node, resolve) {
                 if (node.data.hasChildren) {
-                    Util.$http.get('/rescenter-rest/ResCenterApi/getChildDepartmentList', {
+                    Util.resUrl.get('/rescenter-rest/ResCenterApi/getChildDepartmentList', {
                         params:{
                             identityToken: this.getToken(),
                             departmentID: node.data.departmentId,
@@ -378,7 +400,8 @@
             },
             //人员选择 查询
             searchPerson(pageIndex, pageSize) {
-                Util.$http.get('/rescenter-rest/ResCenterApi/getUserListBySearch', {
+                this.currentPage = pageIndex;
+                Util.resUrl.get('/rescenter-rest/ResCenterApi/getUserListBySearch', {
                     params: {
                         identityToken: this.getToken(),
                         keyWords: this.keyWords,
@@ -397,7 +420,7 @@
             },
             //团队查询
             searchTeam() {
-                Util.$http.get('/rescenter-rest/ResCenterApi/getTeamListByOrgID',{
+                Util.resUrl.get('/rescenter-rest/ResCenterApi/getTeamListByOrgID',{
                     params:{
                         identityToken: this.getToken(),
                         organizationId: this.orgId,
@@ -434,7 +457,7 @@
             resultClear(){
                 this.result ={
                     personList: [],
-                    departmentList: [],
+                    orgList: [],
                     teamList: []
                 };
             },
@@ -454,7 +477,10 @@
                         Object.values(this.$refs.personTable.objData).forEach((obj)=>{
                             if (obj._isHighlight) {
                                 obj = Object.assign({}, obj, {
-                                    valueTemp: obj.userFullName
+                                    valueTemp: obj.userFullName,
+                                    hotpotUser: {
+                                        id: obj.userId
+                                    }
                                 });
                                 this.result.personList.push(obj);
                             }
@@ -464,10 +490,11 @@
                         if (dep) {
                             dep = Object.assign({}, dep, {
                                 fullDepartmentName: JSON.parse(dep.departmentDesc).fullDepartmentName.replace(/_/g, '/'),
-                                valueTemp: dep.departmentName
+                                valueTemp: dep.departmentName,
+                                id :dep.departmentId
                             });
                         }
-                        this.result.departmentList.push(dep);
+                        this.result.orgList.push(dep);
                     } else if (this.actTab === 'teamTab') {
                         Object.values(this.$refs.teamTable.objData).forEach((obj)=>{
                             if (obj._isHighlight) {
@@ -484,19 +511,20 @@
                         this.result.personList.forEach((user)=>{
                             map.set(user.userId, user);
                         });
-
                         this.$refs.personTable.getSelection().forEach((value)=>{
                             if (!map.has(value.userId)) {
-                                let userInfo = JSON.parse(this.base64.decode(value.userDesc));
                                 value = Object.assign({}, value, {
                                     checkTemp: false,
-                                    valueTemp: value.userFullName
+                                    valueTemp: value.userFullName,
+                                    hotpotUser: {
+                                        id: value.userId
+                                    }
                                 });
                                 this.result.personList.push(value);
                             }
                         });
                     } else if (this.actTab === 'depTab') {
-                        this.result.departmentList.forEach((dep)=>{
+                        this.result.orgList.forEach((dep)=>{
                             map.set(dep.departmentId, dep);
                         });
                         this.$refs.depElTree.getCheckedNodes().forEach((dep)=>{
@@ -504,9 +532,10 @@
                                 dep = Object.assign({}, dep, {
                                     fullDepartmentName: JSON.parse(dep.departmentDesc).fullDepartmentName.replace(/_/g, '/'),
                                     checkTemp: false,
-                                    valueTemp: dep.departmentName
+                                    valueTemp: dep.departmentName,
+                                    id :dep.departmentId
                                 });
-                                this.result.departmentList.push(dep);
+                                this.result.orgList.push(dep);
                             }
                         });
                     } else if (this.actTab === 'teamTab') {
@@ -545,7 +574,7 @@
                             }
                             tmpMap[depList[i][parentKey]][childKey].push(depList[i]);
                         } else {
-                            r.push(depList[i])
+                            r.push(depList[i]);
                         }
                     }
                     return r;
@@ -570,18 +599,23 @@
                     this.currentValue = val.substr(0, val.length - 1);
                 }
                 this.$emit('input', this.currentValue);
-                this.$emit('getJsonData', this.result);
+                this.$emit('on-selection-data', JSON.parse(JSON.stringify(this.result)));
+                this.result = {
+                    personList:[],
+                    orgList:[],
+                    teamList:[]
+                };
             }
         },
         watch:{
             value (val) {
                 this.currentValue = val;
             },
-            orgId: function (val, old) {
+            orgId: function (val) {
                 if (this.person) {
                     this.searchPerson(0, 10);
                 }
-                if (this.department) {
+                if (this.org) {
                     this.departmentInit(val);
                 }
                 if (this.team) {

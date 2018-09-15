@@ -4,10 +4,7 @@
             <h3 slot="title">
                 目标列表
             </h3>
-            <a href="#" slot="extra" @click="newMenus">
-                <Icon type="ios-plus-empty"></Icon>
-                新增
-            </a>
+            <Button slot="extra" type="info" @click="newMenus" style=" position: absolute;right: 0px; top: -8px;">新增</Button>
             <Tree ref="treeHere" :data="menuTree" ></Tree>
         </Card>
         <Card dis-hover class="cardItem">
@@ -51,6 +48,10 @@
                             <span>接口列表配置</span>
                             <span style="float:right;">common/restShow.vue</span>
                         </Option>
+                        <Option value="common/treeShow.vue">
+                            <span>树形结构配置</span>
+                            <span style="float:right;">common/treeShow.vue</span>
+                        </Option>
                         <Option value="common/expertTable.vue">
                             <span>高级查询配置</span>
                             <span style="float:right;">common/expertTable.vue</span>
@@ -89,12 +90,12 @@
                 <Button type="info" v-if="!stats.form.isNewNode" :disabled="judgeConfForb || !judgeConf" @click="nodeConf">配置</Button>
                 <Button type="info" @click="nodeSave">保存</Button>
             </div>
-            <div v-if="!stats.tree.isSelecteOn" style="display: flex; justify-content: center; align-items: center">
+            <div v-if="!stats.tree.isSelecteOn" class="tip-message">
                 <p>可选择目录或点击新建</p>
             </div>
         </Card>
         <Modal v-model="stats.form.iconModal" title="图标选择" class="icon-modal-style" :scrollable="true">
-            <div style="display: flex;flex-direction: row;flex-wrap: wrap">
+            <div style="flex-wrap: wrap; -ms-flex-wrap: wrap">
                 <span v-for="(item, index) in stats.form.iconList" class="icon-item" @click="iconSelect(item)">
                     <Icon :type="item" :key="index"></Icon>
                 </span>
@@ -139,8 +140,8 @@
                         iconModal: false,
                         iconList: iconList,
                         isNewNode: false, //是否为新增
-                        delForbidden: ['1','11','111','112','113','12','13','131','132','2','14','15'],
-                        confForbidden: ['1','11','111','112','113','12','13','131','132','2','14','15']
+                        delForbidden: ['1','11','111','112','113','12','13','131','132','2','14','15', '16', '17'],
+                        confForbidden: ['1','11','111','112','113','12','13','131','132','2','14','15', '16', '17']
                     }
                 },
                 formValid: {
@@ -383,11 +384,29 @@
                     title: '删除确认',
                     content: '<p>确认删除吗？</p>',
                     onOk: () => {
-                        this.$http.delete('/funcMag/func/'+ this.currentNodeForm.id).then((res) => {
-                            this.getMenuData();
-                            this.$Message.info('已删除');
-                        }).catch((err)=>{
-                            if(err.response) this.$Message.error(err.response.data.message);
+                        this.$store.dispatch('getConfig', this.$store.state.ui.uiVersion).then(() => {
+                            let uiConfig = this.$store.state.ui.uiConfigData;
+                            if (uiConfig[this.currentNodeForm.parentId]) {
+                                let btns = ['tableBtnConfigs', 'tableRowBtnConfigs', 'formBtnConfigs'];
+                                let config =  uiConfig[this.currentNodeForm.parentId];
+                                for (let i in btns) {
+                                    if (config[btns[i]] && JSON.stringify(config[btns[i]]).indexOf(this.currentNodeForm.id) > -1) {
+                                        this.$Message.error('在父页面中存在自定义按钮配置,不能删除！')
+                                        return;
+                                    }
+                                }
+                            }
+                            this.$http.delete('/funcMag/func/'+ this.currentNodeForm.id).then((res) => {
+                                this.getMenuData();
+                                let config = {
+                                    router: this.$router,
+                                    token: this.$store.loginStore.loginInfo.authToken
+                                };
+                                this.$store.commit('MENU_LIST', config);
+                                this.$Message.info('已删除');
+                            }).catch((err)=>{
+                                if(err.response) this.$Message.error(err.response.data.message);
+                            });
                         });
                     },
                     onCancel: () => {
@@ -403,7 +422,8 @@
                         query: {
                             menuId: this.currentNodeForm.id,
                             menuName: this.currentNodeForm.functionName,
-                            menuPath: this.currentNodeForm.url.url
+                            menuPath: this.currentNodeForm.url.url,
+                            showType: 'table'
                         }
                     });
                 } else if (this.currentNodeForm.url.component === 'common/framework.vue') {
@@ -414,13 +434,23 @@
                             menuName: this.currentNodeForm.functionName
                         }
                     });
-                } else {
+                } else if (this.currentNodeForm.url.component === 'common/expertTable.vue'){
                     this.$router.push({
                         path: '/main/menuConfig/tabConfig',
                         query: {
                             menuId: this.currentNodeForm.id,
                             menuName: this.currentNodeForm.functionName,
                             menuPath: this.currentNodeForm.url.url
+                        }
+                    });
+                } if (this.currentNodeForm.url.component === 'common/treeShow.vue') {
+                    this.$router.push({
+                        path: '/main/menuConfig/restConfig',
+                        query: {
+                            menuId: this.currentNodeForm.id,
+                            menuName: this.currentNodeForm.functionName,
+                            menuPath: this.currentNodeForm.url.url,
+                            showType: 'tree'
                         }
                     });
                 }
@@ -434,7 +464,7 @@
                 return this.currentNodeForm.url.type === 'iframe';
             },
             judgeUrlComponent: function () {
-                let reg = new RegExp(/\/restShow\.vue|\/expertTable\.vue/);
+                let reg = new RegExp(/\/restShow\.vue|\/expertTable\.vue|\/treeShow\.vue/);
                 if (this.currentNodeForm.url && this.currentNodeForm.url.component.search(reg) !== -1){
                     return true;
                 }
@@ -446,7 +476,7 @@
                 return this.currentNodeForm.image1Id;
             },
             judgeConf:function () {
-                let reg = new RegExp(/restShow\.vue|expertTable\.vue|framework\.vue/i);
+                let reg = new RegExp(/restShow\.vue|\/treeShow\.vue|expertTable\.vue|framework\.vue/i);
                 if (this.currentNodeForm.url && this.currentNodeForm.url.component.search(reg) !== -1){
                     return true;
                 }
@@ -469,10 +499,10 @@
 </script>
 <style lang="scss" scoped>
     .cardContainer {
-        display: flex;
+        @include compatibleFlex;
         flex-flow: row nowrap;
         padding: 16px;
-        justify-content: space-between;
+        @include flex-justify;
     }
     .cardItem:nth-child(1) {
         width: 30%;
@@ -482,13 +512,20 @@
     }
 
     .formButtons {
-        display: flex;
-        flex-flow: row nowrap;
-        justify-content: center;
+        @include compatibleFlex;
+        /*flex-flow: row nowrap;*/
+        @include flex-justify('center');
         button {
             margin: 0 6px;
         }
     }
+
+    .tip-message{
+        @include compatibleFlex;
+        @include flex-justify('center');
+        align-items: center
+    }
+
     .icon-item {
         margin: 8px;
         i {

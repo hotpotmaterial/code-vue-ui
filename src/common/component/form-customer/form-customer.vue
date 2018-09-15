@@ -1,7 +1,7 @@
 <style lang="scss" scoped>
     .url-header {
-        display: flex;
-        flex-direction: row;
+        @include compatibleFlex
+        @include flex-direction(row);
         margin-bottom: 16px;
 
         label {
@@ -33,8 +33,8 @@
     }
 
     .config-table{
-        display: flex;
-        flex-direction: row;
+        @include compatibleFlex;
+        @include flex-direction(row);
         .table-style{
             margin-right: 16px;
             width: calc(100% - 380px);
@@ -46,14 +46,14 @@
             .config-title{
                 font-size: 14px;
                 text-align: center;
-                margin:16px 0;
+                margin:0 0 16px;
             }
         }
     }
 
     .btn-config{
-        display: flex;
-        justify-content: space-between;
+        @include compatibleFlex;
+        @include flex-justify;
         margin-top: 16px;
         .btn-config-item{
             margin-right: 16px;
@@ -91,7 +91,7 @@
         <div class="config">
             <Button class="config-btn" type="info" @click="save">保存配置</Button>
             <Button class="config-btn" @click="preview">预览表单</Button>
-            <Button class="config-btn" type="success" @click="buttonShow = true">自定义按钮</Button>
+            <Button v-if="!noBtn" class="config-btn" type="success" @click="buttonShow = true">自定义按钮</Button>
         </div>
 
         <div class="config-table">
@@ -100,7 +100,7 @@
             </div>
             <div class="config-style">
                 <div class="config-title">表单配置</div>
-                <form-check ref="formColumnValidate" :column="formData[currentIndex]"></form-check>
+                <form-check ref="formColumnValidate" :column="formData[currentIndex]" :columnList="formData"></form-check>
             </div>
         </div>
         <Modal v-model="isPreModal" :title="configMenuName" @on-ok="isPreModal = false" width="600" ok-text="确认" cancel-text="" :transfer="true">
@@ -182,7 +182,7 @@
                 buttons: [],
                 buttonShow: false,
                 buttonConfigs:[]
-            }
+            };
         },
         created() {
             // 所有可自定义按钮
@@ -208,8 +208,8 @@
                 this.pathmag = Object.assign({}, this.pathmag, this.config.pathmag);
             }
 
-            if (this.config && this.config._buttonConfigs) {
-                this.buttonConfigs = JSON.parse(JSON.stringify(this.config._buttonConfigs));
+            if (this.config && this.config.formBtnConfigs) {
+                this.buttonConfigs = JSON.parse(JSON.stringify(this.config.formBtnConfigs));
             }
 
             //载入属性配置
@@ -234,7 +234,7 @@
                         sortData.push(columsData[i]);
                     } else {
                         this.$set(columsData[i], '_highlight', false);
-                        this.formData.push(columsData[i])
+                        this.formData.push(columsData[i]);
                     }
                 }
             }
@@ -263,10 +263,10 @@
                         formConfigData[p.name] = p;
                     }
                 });
-                return {'formConfigData': formConfigData, '_buttonConfigs' : this.buttonConfigs};
+                return {'formConfigData': formConfigData, 'formBtnConfigs' : this.buttonConfigs};
             }
         },
-        props: ['config', 'schemaData', 'configMenuName', 'menuId'],
+        props: ['config', 'schemaData', 'configMenuName', 'menuId', 'noBtn'],
         components: {
             'my-table': MyTable,
             'form-check': FormCheck,
@@ -305,7 +305,7 @@
                 });
                 this.$emit('saveConfig', {
                     formConfigData : formConfigData,
-                    _buttonConfigs: this.showConfig._buttonConfigs,
+                    formBtnConfigs: this.showConfig.formBtnConfigs,
                     pathmag: {
                         create: this.pathmag.create,
                         detail: this.pathmag.detail,
@@ -326,13 +326,13 @@
             },
             //保存自定义按钮
             saveBtnConfig(){
-                this.showConfig._buttonConfigs = JSON.parse(JSON.stringify(this.buttonConfigs));
-                this.config._buttonConfigs = JSON.parse(JSON.stringify(this.buttonConfigs));
+                this.showConfig.formBtnConfigs = JSON.parse(JSON.stringify(this.buttonConfigs));
+                this.config.formBtnConfigs = JSON.parse(JSON.stringify(this.buttonConfigs));
                 this.buttonShow = false;
             },
             cancelBtnConfig(){
-                if (this.config && this.config._buttonConfigs) {
-                    this.buttonConfigs = JSON.parse(JSON.stringify(this.config._buttonConfigs));
+                if (this.config && this.config.formBtnConfigs) {
+                    this.buttonConfigs = JSON.parse(JSON.stringify(this.config.formBtnConfigs));
                 } else {
                     this.buttonConfigs = [];
                 }
@@ -347,5 +347,5 @@
                 });
             }
         }
-    }
+    };
 </script>

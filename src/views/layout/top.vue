@@ -1,7 +1,7 @@
 <style scoped lang="scss">
     .affix{
-        display: flex;
-        justify-content: space-between;
+        @include compatibleFlex;
+        @include flex-justify;
         padding: 14px 16px;
         border-bottom: 1px solid #e9eaec;
         box-sizing: border-box;
@@ -22,7 +22,7 @@
                 <Icon type="arrow-down-b"></Icon>
             </a>
             <DropdownMenu slot="list">
-                <DropdownItem name="info">个人信息</DropdownItem>
+                <DropdownItem name="info" v-if="showInfo">个人信息</DropdownItem>
                 <DropdownItem name="logout">注销</DropdownItem>
             </DropdownMenu>
         </Dropdown>
@@ -35,6 +35,7 @@
     export default {
         data(){
             return {
+                showInfo: false
             }
         },
         computed: ({
@@ -46,6 +47,17 @@
             ])
         }),
         created(){
+            let arr = this.$store.getters.menuArray;
+            for (let i = 0; i < arr.length; i++ ) {
+                let menu = arr[i];
+                if (menu.url && menu.url !== '') {
+                    let config = JSON.parse(menu.url);
+                    if (config.component === 'common/personSet.vue') {
+                        this.showInfo = true;
+                        break;
+                    }
+                }
+            }
         },
         methods:{
             ...mapMutations({
@@ -54,12 +66,13 @@
             topClick(name) {
                 if (name === 'logout') {
                     this.$http.get('/logout').then((response)=>{
-                        debugger
-                        this.changeLoginInfo({ authToken: '', username: '', loginId: '' });
+                        this.$store.commit('CLEAR_CONFIG');
                         window.localStorage.removeItem('loginInfo');
-                        this.$router.push({path: Util.indexUrl});
+                        this.$store.commit('CLEAR_MENU');
+                        this.$store.dispatch('clearLogin').then(()=>{
+                            this.$router.push({path: Util.indexUrl});
+                        });
                     }).catch(function (e) {
-                        debugger
                         window.localStorage.removeItem('loginInfo');
                         window.location.href = "/";
                     });

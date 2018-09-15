@@ -24,7 +24,7 @@
 </style>
 <template>
     <div class="table-ext-show">
-        <Form ref="searchValidate" :model="formParam" inline>
+        <Form ref="searchValidate" :model="formParam" inline @submit.native.prevent>
             <FormItem v-if="searchForm.length > 0" v-for="(col, index) in searchForm" :key="index" :label="col.title || col.name" :prop="col.name">
                 <div v-if="col.searchModel == 'RANGE'">
                     <div v-if="col.format == 'date-time'">
@@ -41,7 +41,7 @@
                         <Option v-for="opt in dictList[col.name]" :value="opt.value" :key="opt.value">{{ opt.name }}</Option>
                     </Select>
                     <DatePicker v-else-if="col.format == 'date-time'" type="datetime" :format="col.pattern" v-model="formParam[col.name]"></DatePicker>
-                    <person-input style="min-width: 187px" v-else-if="col.personInput && col.personInput.length > 0" :single="col.personInput.indexOf('single') > -1" :person="col.personInput.indexOf('person') > -1" :org="col.personInput.indexOf('org') > -1" v-model="formParam[col.name]"></person-input>
+                    <person-input style="min-width: 187px" v-else-if="col.personInput && col.personInput.length > 0" :single="col.personInput.indexOf('single') > -1" :person="col.personInput.indexOf('person') > -1" :org="col.personInput.indexOf('org') > -1" :team="col.personInput.indexOf('team') > -1" v-model="formParam[col.name]"></person-input>
                     <Input v-else type="text" v-model="formParam[col.name]" style="min-width: 187px"/>
                 </div>
             </FormItem>
@@ -79,7 +79,7 @@
                     </Button>
                 </Upload>
             </FormItem>
-            <FormItem v-if="config.tabConfigData.buttonConfigs && config.tabConfigData.buttonConfigs.length>0" v-for="(btn, index) in config.tabConfigData.buttonConfigs" :key="btn.btnId">
+            <FormItem v-if="config.tableBtnConfigs && config.tableBtnConfigs.length>0" v-for="(btn, index) in config.tableBtnConfigs" :key="btn.btnId">
                 <div :id="'btnFrom-'+btn.btnId"></div>
             </FormItem>
         </Form>
@@ -111,6 +111,7 @@
     import RoleButton from '../role-button/role-button.vue';
     import Util from '../../../libs/util';
     import Vue from 'vue';
+    import fileServer from '../../../libs/fileServer';
     export default {
         data(){
             return{
@@ -168,15 +169,15 @@
         },
         created() {
             //表名
-            this.tableName = this.config.tableMappingName.replace(/_(\w)/g, ($0,$1) => $1.toUpperCase());
+            this.tableName = this.config.tableMappingName.toLowerCase().replace(/_(\w)/g, ($0,$1) => $1.toUpperCase());
             // 获取字典
-            let code = window.localStorage.dictstroage && JSON.parse(window.localStorage.dictstroage) || [];
+            let code = this.$store.getters.dictstroage;
             // 构建查询表单
             if (this.config.tabConfigData.searchForm) {
                 this.searchForm = Object.values(this.config.tabConfigData.searchForm).sort((a, b) => {
                     return a.sortIndex - b.sortIndex;
                 });
-                this.searchForm.forEach((obj, index) => {
+                this.searchForm.forEach((obj) => {
                     this.$set(this.formParam, obj.name, '');
                     //获取对应字典
                     if (obj.dictName) {
@@ -192,9 +193,9 @@
             //构建Table
             if (this.config.tabConfigData.tableColumns) {
                 let arr = Object.values(this.config.tabConfigData.tableColumns).sort((a, b) => {
-                   return a.sortIndex - b.sortIndex;
+                    return a.sortIndex - b.sortIndex;
                 });
-                arr.forEach((obj, index, array)=>{
+                arr.forEach((obj)=>{
                     if (obj.isShow) {
                         let dictValues = null;
                         // 是否是字典
@@ -206,20 +207,39 @@
                                 dictValues = result[0].value;
                             }
                         }
+                        let _this = this;
                         this.tableColumns.push({
                             title: obj.title ? obj.title : obj.name,
-                            key: obj.name,
+//                            key: obj.name,
                             sortable: obj.isOrder,
-                            render: obj.dictName? (h, params) => { //如果是字典，获取对应的值
-                                if (dictValues) {
+                            render: (h, params) => {
+                                let content = h('span',params.row[obj.name]);
+                                if (!params.row[obj.name]) { //先判断是否有值，没有值就为空字符串
+                                    return ''
+                                } else if (obj.dictName && dictValues){ //如果是字典，获取对应的值
                                     for (let i = 0; i < dictValues.length; i++) {
                                         if (dictValues[i].value == params.row[obj.name]) {
-                                            return h('span',dictValues[i].name);
+                                            content = h('span',dictValues[i].name);
                                         }
                                     }
+                                } else if (obj.fileId && obj.fileId !== '') {
+                                    content = h('a',{
+                                        on:{
+                                            click(){
+                                                fileServer.downloadFile(params.row[obj.fileId], params.row[obj.name]);
+                                            }
+                                        }
+                                    }, [params.row[obj.name]])
+                                } else if (obj.renderFormat) {
+                                    if (obj.format === 'date-time') {
+                                        content = h('div',{}, new Date(params.row[obj.name]).dateFormat(obj.renderFormat));
+                                    } else {
+                                        let result = obj.renderFormat.replace('${d}', 'params.row[obj.name]');
+                                        content = h('div',{}, eval(result));
+                                    }
                                 }
-                                return h('span',params.row[obj.name]);
-                            } : null
+                                return content
+                            }
                         });
                     }
                 });
@@ -279,7 +299,7 @@
                     this.searchParams.pageParms.pageIndex = 0;
             },
             editSearchParams(){
-                this.searchForm.forEach((obj, index) => {
+                this.searchForm.forEach((obj) => {
                     if (obj.searchModel === 'RANGE') {
                         let arr= [{name:'-min', operator: 'GTE'},{name:'-max', operator: 'LTE'}];
                         for (let i=0; i < arr.length; i++) {
@@ -336,8 +356,8 @@
                         });
                     }
                 }
-                if (this.config.tabConfigData.rowButtonConfigs) {
-                    this.config.tabConfigData.rowButtonConfigs.forEach((btn)=>{
+                if (this.config.tableRowBtnConfigs) {
+                    this.config.tableRowBtnConfigs.forEach((btn)=>{
                         otherAction.push({
                             text: btn.btnName,
                             config: btn.btnConfig,
@@ -474,7 +494,7 @@
                                 this.searchPost(this.searchParams);
                                 this.$Message.info('删除成功');
                             }
-                        }).catch((e) => {
+                        }).catch(() => {
                             this.$Message.error('删除失败');
                         });
                     },
@@ -482,11 +502,10 @@
                         this.$Message.info('已取消');
                     }
                 });
-
             },
             clearSearchForm() {
                 this.$refs['searchValidate'].resetFields();
-                this.searchForm.forEach((obj, index) => {
+                this.searchForm.forEach((obj) => {
                     if (obj.searchModel === 'RANGE') {
                         let arr = ['-min', '-max'];
                         for (let i=0; i < arr.length; i++) {
@@ -508,7 +527,7 @@
                     for (let i=0; i < arrayParam.length; i++) {
                         let param = arrayParam[i].replace(this.tableName, '').replace(/( |^)[A-Z]/g, (L) => L.toLowerCase());
                         if (data.hasOwnProperty(param)) {
-                            let re = new RegExp("\{" + arrayParam[i] + "\}");
+                            let re = new RegExp('\{' + arrayParam[i] + '\}');
                             url = url.replace(re, data[param]);
                         }
                     }
@@ -525,12 +544,12 @@
                 let excelTitle = this.config.tabConfigData.importExcelConfig.excelHeader != undefined &&
                   this.config.tabConfigData.importExcelConfig.excelHeader.length > 0 ?
                   this.config.tabConfigData.importExcelConfig.excelHeader : this.config.tableMappingName;
-                let url = Util.url + '/' + Util.baseUrl + '/api/common/excel/template/download';
+                let url = Util.url + Util.baseUrl + '/api/common/excel/template/download';
                 let fileName = excelTitle + '_导入模板.xlsx';
                 let reqData = {
-                    "excelTitle": [],
-                    "tableName": this.config.tableMappingName,
-                    "excelHeader": excelTitle + "数据"
+                    'excelTitle': [],
+                    'tableName': this.config.tableMappingName,
+                    'excelHeader': excelTitle + '数据'
                 };
                 let i = 0;
                 for (let key in this.config.formConfigData) {
@@ -552,20 +571,20 @@
                 xhr.setRequestHeader('AUTH_TOKEN', this.$store.getters.loginInfo.authToken);
                 xhr.setRequestHeader('CURRENT_USER', this.$store.getters.loginInfo.loginId);
                 xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.responseType = "blob";
+                xhr.responseType = 'blob';
                 xhr.onload = function () {
                     if (this.status === 200) {
                         let blob = this.response;
                         if (navigator.appVersion.toString().indexOf('.NET') > 0) {
-                          window.navigator.msSaveBlob(blob, fileName);
+                            window.navigator.msSaveBlob(blob, fileName);
                         } else {
-                          let body = document.body;
-                          let a = document.createElement('a');
-                          a.download = fileName;
-                          a.href = URL.createObjectURL(blob);
-                          body.appendChild(a);
-                          a.click();
-                          body.removeChild(a);
+                            let body = document.body;
+                            let a = document.createElement('a');
+                            a.download = fileName;
+                            a.href = URL.createObjectURL(blob);
+                            body.appendChild(a);
+                            a.click();
+                            body.removeChild(a);
                         }
                     } else {
                         compVue.$Message.error('文件下载失败');
@@ -588,37 +607,40 @@
                 let excelTitle = this.config.tabConfigData.importExcelConfig.excelHeader != undefined &&
                   this.config.tabConfigData.importExcelConfig.excelHeader.length > 0 ?
                   this.config.tabConfigData.importExcelConfig.excelHeader : this.config.tableMappingName;
-                let url = Util.url + '/'+ Util.baseUrl + '/api/common/excel/export/download';
+                let url = Util.url + Util.baseUrl + '/api/common/excel/export/download';
                 let fileName = excelTitle + '_数据导出.xlsx';
                 let searchp = [];
                 if (this.initParam) {
                     for (let key in this.initParam.export) {
                         let searchparam = {};
                         searchparam.field = key;
-                        searchparam.operator = "EQ";
+                        searchparam.operator = 'EQ';
                         searchparam.value = this.initParam.export[key];
                         searchp.push(searchparam);
                     }
                 }
                 let reqData = {
-                    "excelTitle": [],
-                    "tableName": this.config.tableMappingName,
-                    "excelHeader": excelTitle + "数据",
-                    "pageDTO": {
-                        "collection": {
-                            "filters": searchp
+                    'excelTitle': [],
+                    'tableName': this.config.tableMappingName,
+                    'excelHeader': excelTitle + '数据',
+                    'pageDTO': {
+                        'collection': {
+                            'filters': searchp
                         },
-                        "orders": [],
-                        "pageParms": {
-                            "autoRecordCount": true,
-                            "pageIndex": 0,
-                            "pageSize": 0,
-                            "recordCount": 0
+                        'orders': [],
+                        'pageParms': {
+                            'autoRecordCount': true,
+                            'pageIndex': 0,
+                            'pageSize': 0,
+                            'recordCount': 0
                         }
                     }
                 };
                 let i = 0;
                 for (let key in this.config.tabConfigData.tableColumns) {
+                    if (this.config.tabConfigData.tableColumns[key].type === 'array' || this.config.tabConfigData.tableColumns[key].type === 'object') {
+                        continue;
+                    }
                     let excelTitleObj = {};
                     excelTitleObj.fieldName = this.config.tabConfigData.tableColumns[key].mappingName;
                     excelTitleObj.fieldDESC = this.config.tabConfigData.tableColumns[key].description || this.config.tabConfigData.tableColumns[key].mappingName;
@@ -632,7 +654,7 @@
                 this.download(url, fileName, reqData, 'export');
             },
             // 处理没有选择Excel文件的情况
-            handleImportFormatError(file){
+            handleImportFormatError(){
                 this.$Message.error('请选择Excel文件');
             },
             // 导入文件
@@ -659,7 +681,8 @@
                                     }
                                 }
                                 // 生成excel对应参数数组
-                                let i = 0, excelTitleArr = [];
+//                                let i = 0, excelTitleArr = [];
+                                let i =0;
                                 for (let key in this.config.formConfigData) {
                                     formdata.append('excelTitle[' + i + '].fieldName', this.config.formConfigData[key].mappingName);
                                     formdata.append('excelTitle[' + i + '].attrName', this.config.formConfigData[key].name);
@@ -676,14 +699,14 @@
                                 };
                                 // 上传参数和文件
                                 this.$http.post(this.config.pathmag.import_excel.uri, formdata, config).then((res) => {
-                                    if (res.data.statusCode == "0") {
+                                    if (res.data.statusCode == '0') {
                                         this.excelReport = res.data.excelReport;
                                         this.excelImportReport();
                                     } else {
                                         this.importLoading = false;
                                         this.$Message.error('导入数据发生异常');
                                     }
-                                }).catch((error) => {
+                                }).catch(() => {
                                     this.importLoading = false;
                                     this.$Message.error('导入数据发生异常');
                                 });
@@ -701,20 +724,20 @@
             // 导入数据结果报告
             excelImportReport() {
                 let report = this.excelReport, me = this;
-                let reportDetail = "<p>导入总条数: " + report.total + "，成功" + report.successTotal + "条，<span style='color: red'>失败" + report.failedTotal + "条</span></p>"
+                let reportDetail = '<p>导入总条数:' + report.total + '，成功' + report.successTotal + '条，<span style="color: red">失败' + report.failedTotal + '条</span></p>';
                 if (report.failedDetails.length > 0) {
-                    reportDetail += "<br/><p>失败行详情：</p>";
+                    reportDetail += '<br/><p>失败行详情：</p>';
                     for (let i = 0;i < report.failedDetails.length;i++) {
-                        reportDetail += "<p>第" + report.failedDetails[i].index + "行：" + report.failedDetails[i].failedReason + "</p>"
+                        reportDetail += '<p>第' + report.failedDetails[i].index + '行：' + report.failedDetails[i].failedReason + '</p>';
                     }
                 }
                 // 延时一段时间防止modal消失
                 setTimeout(function(){
                     me.importLoading = false;
                     me.$Modal.success({
-                        title: "数据导入成功，耗时：" + report.timeCost + "毫秒",
+                        title: '数据导入成功，耗时：' + report.timeCost + '毫秒',
                         content: reportDetail,
-                        width: "600px",
+                        width: '600px',
                         onOk: () => {
                             me.searchPost(me.searchParams);
                         }
@@ -724,9 +747,9 @@
         },
         mounted(){
             let _this = this;
-            if(this.config.tabConfigData.buttonConfigs && this.config.tabConfigData.buttonConfigs.length > 0) {
-                this.config.tabConfigData.buttonConfigs.forEach((btn)=>{
-                    let options = require	('../../../views/content/' + btn.btnConfig.component).default;
+            if(this.config.tableBtnConfigs && this.config.tableBtnConfigs.length > 0) {
+                this.config.tableBtnConfigs.forEach((btn)=>{
+                    let options = require('../../../views/content/' + btn.btnConfig.component).default;
                     let a = Vue.extend(options);
                     let b = new a({
                         router: this.$router,
@@ -740,7 +763,7 @@
                     }).$on('refreshTable', function () {
                         _this.search();
                     });
-                    b.$mount("#btnFrom-" + btn.btnId);
+                    b.$mount('#btnFrom-' + btn.btnId);
                 });
             }
         }

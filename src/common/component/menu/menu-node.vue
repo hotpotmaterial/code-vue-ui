@@ -59,37 +59,39 @@
             return {
                 hasChildren: false,
                 open: false,
-                Modals:false
+                Modals:false,
+                specialList:['common/restShow.vue', 'common/expertTable.vue', 'common/framework.vue', 'common/treeShow.vue']
             }
         },
         computed: {
-            ...mapGetters([
+             ...mapGetters([
                 'currentMenu'
             ]),
         },
         created(){
             //判断是否有子菜单
-            if (this.node.children && this.node.children.length > 0) {
-                this.node.children.forEach((child, index)=>{
-                    if (child.isMenu === 'Y') {
-                        this.hasChildren = true;
-                    }
-                });
-            }
-
-            this.menuOpen(this.node);
-            if (this.currentMenu && this.currentMenu.url && this.currentMenu.url !=='') {
-                let urlConfig = JSON.parse(this.currentMenu.url);
-                if (this.$route.path === '/main' || this.$route.path === '/main/') {
-                    let query = {};
-                    if (urlConfig.component === 'common/restShow.vue' || urlConfig.component === 'common/expertTable.vue' || urlConfig.component === 'common/framework.vue') {
-                        query = {
-                            menuId : this.currentMenu.id
+            this.$nextTick(()=>{
+                if (this.node.children && this.node.children.length > 0) {
+                    this.node.children.forEach((child, index)=>{
+                        if (child.isMenu === 'Y') {
+                            this.hasChildren = true;
                         }
-                    }
-                    this.$router.push({path: '/main'+urlConfig.path, query: query});
+                    });
                 }
-            }
+                this.menuOpen(this.node);
+                if (this.currentMenu && this.currentMenu.url && this.currentMenu.url !=='') {
+                    let urlConfig = JSON.parse(this.currentMenu.url);
+                    if (this.$route.path === '/main' || this.$route.path === '/main/') {
+                        let query = {};
+                        if (this.specialList.indexOf(urlConfig.component) > -1) {
+                            query = {
+                                menuId : this.currentMenu.id
+                            }
+                        }
+                        this.$router.push({path: '/main'+urlConfig.path, query: query});
+                    }
+                }
+            });
         },
         methods:{
             ...mapMutations({
@@ -108,7 +110,7 @@
                         });
                     } else {
                         let query = {};
-                        if (urlConfig.component === 'common/restShow.vue' || urlConfig.component === 'common/expertTable.vue' || urlConfig.component === 'common/framework.vue') {
+                        if (this.specialList.indexOf(urlConfig.component) > -1) {
                             query = {
                                 menuId : node.id
                             }
@@ -130,7 +132,7 @@
                         if (node.children[i].id === this.currentMenu.id) {
                             this.open= true;
                             break;
-                        } else if (node.children[i].children != null && node.children[i].children.length>0) {
+                        } else if (node.children[i].children && node.children[i].children.length>0) {
                             this.menuOpen(node.children[i]);
                         }
                     }

@@ -1,4 +1,3 @@
-import iView from 'iview';
 import stores from './store';
 import Util from './libs/util';
 
@@ -6,16 +5,11 @@ let loginInit = {};
 loginInit.login = function(router){
     router.onReady(()=>{
         let token = '';
-        if (window.location.pathname === Util.indexUrl){ //访问为登录路径时，直接返回
-            window.localStorage.removeItem('loginInfo');
-            return;
-        }
-
         if(window.localStorage.loginInfo && JSON.parse(window.localStorage.loginInfo)){ //从localstorage中取出用户信息
             stores.commit('CHANGELOGININFO',JSON.parse(window.localStorage.loginInfo));
             token = stores.state.loginStore.loginInfo.authToken;
         }
-        if(token !== ''){
+        if(token !== '' && window.location.pathname !== Util.indexUrl){
             //获取目录
             let config = {
                 router: router,
@@ -23,8 +17,13 @@ loginInit.login = function(router){
             };
             stores.commit('MENU_LIST', config);
         }else{
-            window.localStorage.removeItem('loginInfo');
-            router.push({path: Util.indexUrl,  query: {redirect: encodeURIComponent(router.currentRoute.fullPath)}});
+            if (window.location.pathname === Util.indexUrl){ //访问为登录路径时，直接返回
+                window.localStorage.removeItem('loginInfo');
+                return;
+            } else {
+                window.localStorage.removeItem('loginInfo');
+                router.push({path: Util.indexUrl,  query: {redirect: encodeURIComponent(router.currentRoute.fullPath)}});
+            }
         }
     });
 
@@ -47,10 +46,12 @@ loginInit.login = function(router){
         if(err.response && err.response.status == 401){
             stores.commit('CHANGELOGININFO',{});
             window.localStorage.removeItem('loginInfo');
-            router.replace({
-                path: Util.indexUrl,
-                query: {redirect: encodeURIComponent(router.currentRoute.fullPath)}
-            });
+            if (router.currentRoute.path !== Util.indexUrl) {
+                router.replace({
+                    path: Util.indexUrl,
+                    query: {redirect: encodeURIComponent(router.currentRoute.fullPath)}
+                });
+            }
         }
         return Promise.reject(err);
     });

@@ -145,7 +145,7 @@
                 formRule: {
                     orgName: { required: true, message: '组织名称不能为空', trigger: 'blur' },
                     sort: [
-                        {type: "number", required: true, message: '排序不能为空', trigger: 'blur' },
+                        {type: 'number', required: true, message: '排序不能为空', trigger: 'blur' },
                         { type: 'number', message: '必须为数字', trigger: 'change' }
                     ]
                 },
@@ -181,11 +181,9 @@
                 this.stats.isNewOrg = false;
                 this.$refs.formValid.resetFields();
                 this.modalForm = Object.assign({},row);
-                console.log(row)
             },
             parentOrgSel (parent) {
                 if (parent.orgList.length) {
-                    console.log(parent.orgList[0])
                     this.modalForm.orgFullId = parent.orgList[0].orgFullId;
                     this.modalForm.parentId = parent.orgList[0].id;
                     this.modalForm.orgFullName = parent.orgList[0].orgFullName + '/' + this.modalForm.orgName;
@@ -201,7 +199,7 @@
                         if (this.stats.isNewOrg) {
                             let req = Object.assign({},this.modalForm);
                             req.orgFullName = this.modalForm.orgFullName || this.modalForm.orgName;
-                            this.$http.post('/orgMag/org', req).then((res)=> {
+                            this.$http.post('/orgMag/org', req).then(()=> {
                                 this.getOrgData();
                                 this.$Message.success('新增成功');
                             });
@@ -212,7 +210,7 @@
                                 sort: this.modalForm.sort,
                                 description: this.modalForm.description
                             };
-                            this.$http.put('/orgMag/org/' + this.modalForm.id, req).then((res)=> {
+                            this.$http.put('/orgMag/org/' + this.modalForm.id, req).then(()=> {
                                 this.getOrgData();
                                 this.$Message.success('修改成功');
                             });
@@ -225,7 +223,7 @@
 
             orgDelete(row) {
                 if (row.children && row.children.length){
-                    this.$Message.error('未删除子组织')
+                    this.$Message.error('未删除子组织');
                 } else {
                     this.$Modal.confirm({
                         title: '删除确认',
